@@ -24,7 +24,7 @@ Tambahkan `rustbasic-activitylog` ke dalam berkas `Cargo.toml` proyek aplikasi A
 
 ```toml
 [dependencies]
-rustbasic-activitylog = "0.0.1"
+rustbasic-activitylog = "0.0.2"
 ```
 
 ---
