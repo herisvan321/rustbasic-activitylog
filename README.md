@@ -24,7 +24,7 @@ Tambahkan `rustbasic-activitylog` ke dalam berkas `Cargo.toml` proyek aplikasi A
 
 ```toml
 [dependencies]
-rustbasic-activitylog = { path = "../rustbasic-activitylog" } # Atau versi dari crates.io nanti
+rustbasic-activitylog = "0.0.1"
 ```
 
 ---
