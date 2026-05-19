@@ -1740,6 +1740,7 @@ checksum = "805bfd7352166bae857ee569628b52bcd85a1cecf7810861ebceb1686b72b75d"
 dependencies = [
  "memo-map",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2521,9 +2522,7 @@ dependencies = [
 
 [[package]]
 name = "rustbasic-core"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beffc3ab480a25d494c04ce9f0fb392ccbccb50774ab6c29a97a49034568d50f"
+version = "0.1.9"
 dependencies = [
  "async-trait",
  "axum",

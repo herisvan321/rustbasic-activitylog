@@ -1,6 +1,6 @@
 # 📝 rustbasic-activitylog
 
-Package **Activity Logging** yang elegan dan terintegrasi penuh untuk framework **RustBasic**, terinspirasi dari **Spatie Laravel ActivityLog**.
+Package **Activity Logging** yang elegan, cepat, dan terintegrasi penuh untuk framework **RustBasic**.
 
 Dirancang khusus untuk ekosistem **Axum** dan **SeaORM**, package ini memungkinkan Anda mencatat riwayat aktivitas pengguna, perubahan model, maupun log permintaan HTTP secara otomatis dan terstruktur.
 
