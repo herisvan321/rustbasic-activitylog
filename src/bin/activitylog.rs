@@ -25,7 +25,7 @@ fn print_help() {
     println!("\n{}", "📝 RustBasic Activity Log CLI".magenta().bold());
     println!("{}", "==============================".magenta());
     println!("{}", "Usage:".bold());
-    println!("  rustbasic-activitylog install    {}", "Scaffold Activity Log table and model into your project".dimmed());
+    println!("  rustbasic-activitylog install    {}", "Scaffold Activity Log table and migration into your project".dimmed());
     println!();
 }
 
@@ -38,7 +38,7 @@ pub fn make_activitylog_scaffolding() {
         return;
     }
 
-    // 1. Buat Migration
+    // 1. Buat Migration (menggunakan rustbasic-core Schema API)
     let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
     let migration_name = format!("m{}_create_activity_log_table", timestamp);
     let migration_path = format!("database/migrations/{}.rs", migration_name);
@@ -47,49 +47,33 @@ pub fn make_activitylog_scaffolding() {
     fs::create_dir_all("database/migrations").ok();
 
     let migration_template = format!(
-r#"use sea_orm_migration::prelude::*;
-use async_trait::async_trait;
+r#"use rustbasic_core::{{Schema, SchemaManager, MigrationTrait, DbErr}};
+use rustbasic_core::async_trait;
 
-#[derive(Iden)]
-pub enum ActivityLog {{
-    Table, Id, LogName, Description, SubjectType, SubjectId, CauserType, CauserId, Properties, CreatedAt, UpdatedAt,
-}}
-
-#[derive(Iden)]
 pub struct Migration;
-
-impl MigrationName for Migration {{
-    fn name(&self) -> &str {{
-        "{migration_name}"
-    }}
-}}
 
 #[async_trait]
 impl MigrationTrait for Migration {{
-    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {{
-        manager.create_table(
-            Table::create()
-                .table(ActivityLog::Table)
-                .if_not_exists()
-                .col(ColumnDef::new(ActivityLog::Id).integer().not_null().auto_increment().primary_key())
-                .col(ColumnDef::new(ActivityLog::LogName).string().null())
-                .col(ColumnDef::new(ActivityLog::Description).text().not_null())
-                .col(ColumnDef::new(ActivityLog::SubjectType).string().null())
-                .col(ColumnDef::new(ActivityLog::SubjectId).integer().null())
-                .col(ColumnDef::new(ActivityLog::CauserType).string().null())
-                .col(ColumnDef::new(ActivityLog::CauserId).integer().null())
-                .col(ColumnDef::new(ActivityLog::Properties).json().null())
-                .col(ColumnDef::new(ActivityLog::CreatedAt).date_time().default(Expr::current_timestamp()))
-                .col(ColumnDef::new(ActivityLog::UpdatedAt).date_time().default(Expr::current_timestamp()))
-                .to_owned(),
-        ).await?;
-
-        Ok(())
+    fn name(&self) -> &str {{
+        "{migration_name}"
     }}
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {{
-        manager.drop_table(Table::drop().table(ActivityLog::Table).to_owned()).await?;
-        Ok(())
+    async fn up<'a>(&self, manager: &'a SchemaManager<'a>) -> Result<(), DbErr> {{
+        Schema::create(manager, "activity_log", |table| {{
+            table.id();
+            table.string("log_name").nullable();
+            table.text("description").not_null();
+            table.string("subject_type").nullable();
+            table.integer("subject_id").nullable();
+            table.string("causer_type").nullable();
+            table.integer("causer_id").nullable();
+            table.text("properties").nullable(); // JSON disimpan sebagai TEXT
+            table.timestamps();
+        }}).await
+    }}
+
+    async fn down<'a>(&self, manager: &'a SchemaManager<'a>) -> Result<(), DbErr> {{
+        Schema::drop(manager, "activity_log").await
     }}
 }}
 "#, migration_name = migration_name);
@@ -98,48 +82,39 @@ impl MigrationTrait for Migration {{
     update_migration_mod_rs(&migration_name);
     println!("   {} Migration dibuat: {}", "📦".blue(), migration_path.cyan());
 
-    // 2. Buat Model
+    // 2. Buat Model (plain struct menggunakan rustbasic_core model! macro)
     fs::create_dir_all("src/app/models").ok();
 
-    let model_name = "activity_log";
-    let table_name = "activity_log";
-    let file_path = format!("src/app/models/{}.rs", model_name);
-    
-    if !std::path::Path::new(&file_path).exists() {
-        let model_template = format!(
-r#"use rustbasic_core::sea_orm::entity::prelude::*;
-use serde::{{Deserialize, Serialize}};
+    let model_file = "src/app/models/activity_log.rs";
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "{table_name}")]
-pub struct Model {{
-    #[sea_orm(primary_key)]
-    pub id: i32,
-    pub log_name: Option<String>,
-    #[sea_orm(column_type = "Text")]
-    pub description: String,
-    pub subject_type: Option<String>,
-    pub subject_id: Option<i32>,
-    pub causer_type: Option<String>,
-    pub causer_id: Option<i32>,
-    pub properties: Option<Json>,
-    pub created_at: Option<DateTime>,
-    pub updated_at: Option<DateTime>,
-}}
+    if !std::path::Path::new(model_file).exists() {
+        let model_template =
+r#"use rustbasic_core::model;
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {{}}
-
-impl ActiveModelBehavior for ActiveModel {{}}
-"#, table_name = table_name);
-        
-        fs::write(&file_path, model_template).expect("Gagal membuat model Activity Log");
-        update_model_mod_rs("ActivityLog", model_name);
-        println!("   {} Model dibuat: {}", "📄".blue(), file_path.cyan());
+model! {
+    table: "activity_log",
+    ActivityLog {
+        pub id: i32,
+        pub log_name: Option<String>,
+        pub description: String,
+        pub subject_type: Option<String>,
+        pub subject_id: Option<i32>,
+        pub causer_type: Option<String>,
+        pub causer_id: Option<i32>,
+        pub properties: Option<String>, // JSON string
+    }
+}
+"#;
+        fs::write(model_file, model_template).expect("Gagal membuat model Activity Log");
+        update_model_mod_rs("activity_log");
+        println!("   {} Model dibuat: {}", "📄".blue(), model_file.cyan());
     }
 
     println!("\n{} {}", "✅".green(), "Scaffolding Activity Log berhasil diselesaikan!".green().bold());
     println!("{} Jalankan '{}' untuk menerapkan tabel ke database.", "💡".yellow(), "rustbasic migrate".cyan());
+    println!("{} Tambahkan middleware di routes Anda:", "💡".yellow());
+    println!("   {}", "use rustbasic_activitylog::activity_log_middleware;".cyan());
+    println!("   {}", ".layer(from_fn(activity_log_middleware))".cyan());
 }
 
 fn update_migration_mod_rs(mod_name: &str) {
@@ -158,17 +133,16 @@ fn update_migration_mod_rs(mod_name: &str) {
 
     // Tambahkan ke list migrations
     let search_pattern = "fn migrations() -> Vec<Box<dyn MigrationTrait>> {";
-    if let Some(pos) = content.find(search_pattern) {
-        if let Some(insert_pos) = content[pos..].find("        ]") {
-            let absolute_insert_pos = pos + insert_pos;
-            content.insert_str(absolute_insert_pos, &format!("            Box::new({}::Migration),\n", mod_name));
-        }
+    if let Some(pos) = content.find(search_pattern)
+        && let Some(insert_offset) = content[pos..].find("        ]") {
+        let absolute_insert_pos = pos + insert_offset;
+        content.insert_str(absolute_insert_pos, &format!("            Box::new({}::Migration),\n", mod_name));
     }
 
     fs::write(mod_path, content).ok();
 }
 
-fn update_model_mod_rs(class_name: &str, snake_name: &str) {
+fn update_model_mod_rs(snake_name: &str) {
     let mod_path = "src/app/models/mod.rs";
     if !std::path::Path::new(mod_path).exists() { return; }
 
@@ -185,5 +159,4 @@ fn update_model_mod_rs(class_name: &str, snake_name: &str) {
         .expect("Gagal membuka models/mod.rs");
 
     writeln!(file, "{}", mod_line).ok();
-    writeln!(file, "pub use {}::Entity as {};", snake_name, class_name).ok();
 }

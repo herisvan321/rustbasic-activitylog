@@ -1,24 +1,17 @@
-use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "activity_log")]
-pub struct Model {
-    #[sea_orm(primary_key)]
+/// Model activity log yang tersimpan di database.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActivityLog {
     pub id: i32,
     pub log_name: Option<String>,
-    #[sea_orm(column_type = "Text")]
     pub description: String,
     pub subject_type: Option<String>,
     pub subject_id: Option<i32>,
     pub causer_type: Option<String>,
     pub causer_id: Option<i32>,
-    pub properties: Option<Json>,
-    pub created_at: Option<DateTime>,
-    pub updated_at: Option<DateTime>,
+    pub properties: Option<Value>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}

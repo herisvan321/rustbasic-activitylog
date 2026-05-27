@@ -1,10 +1,23 @@
-use crate::entities::activity_log;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
+use rustbasic_core::sqlx::{self, AnyPool};
 use serde_json::Value;
 use chrono::Local;
 
+/// Builder untuk mencatat aktivitas ke tabel `activity_log`.
+///
+/// # Contoh
+/// ```rust,ignore
+/// use rustbasic_activitylog::ActivityLogger;
+///
+/// ActivityLogger::new(db)
+///     .use_log("auth")
+///     .performed_on("users", user_id)
+///     .caused_by("users", actor_id)
+///     .with_properties(json!({ "ip": "127.0.0.1" }))
+///     .log("User login")
+///     .await?;
+/// ```
 pub struct ActivityLogger {
-    db: DatabaseConnection,
+    db: AnyPool,
     log_name: String,
     subject_type: Option<String>,
     subject_id: Option<i32>,
@@ -14,7 +27,7 @@ pub struct ActivityLogger {
 }
 
 impl ActivityLogger {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: AnyPool) -> Self {
         Self {
             db,
             log_name: "default".to_string(),
@@ -48,21 +61,30 @@ impl ActivityLogger {
         self
     }
 
-    pub async fn log(self, description: &str) -> Result<activity_log::Model, sea_orm::DbErr> {
-        let now = Local::now().naive_local();
-        let active_model = activity_log::ActiveModel {
-            log_name: Set(Some(self.log_name)),
-            description: Set(description.to_string()),
-            subject_type: Set(self.subject_type),
-            subject_id: Set(self.subject_id),
-            causer_type: Set(self.causer_type),
-            causer_id: Set(self.causer_id),
-            properties: Set(self.properties),
-            created_at: Set(Some(now)),
-            updated_at: Set(Some(now)),
-            ..Default::default()
-        };
+    /// Simpan log aktivitas ke database.
+    pub async fn log(self, description: &str) -> Result<(), sqlx::Error> {
+        let now = Local::now().naive_local().to_string();
+        let properties_str = self.properties
+            .as_ref()
+            .map(|p| p.to_string());
 
-        active_model.insert(&self.db).await
+        sqlx::query(
+            "INSERT INTO activity_log \
+             (log_name, description, subject_type, subject_id, causer_type, causer_id, properties, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(self.log_name)
+        .bind(description)
+        .bind(self.subject_type)
+        .bind(self.subject_id)
+        .bind(self.causer_type)
+        .bind(self.causer_id)
+        .bind(properties_str)
+        .bind(&now)
+        .bind(&now)
+        .execute(&self.db)
+        .await?;
+
+        Ok(())
     }
 }

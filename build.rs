@@ -8,7 +8,7 @@ fn main() {
         return;
     }
 
-    // Ambil direktori kerja saat ini. 
+    // Ambil direktori kerja saat ini.
     let project_root = match env::var("PWD") {
         Ok(pwd) => PathBuf::from(pwd),
         Err(_) => match env::current_dir() {
@@ -44,49 +44,33 @@ fn main() {
         let migration_path = migrations_dir.join(format!("{}.rs", migration_name));
 
         let migration_template = format!(
-r#"use sea_orm_migration::prelude::*;
-use async_trait::async_trait;
+r#"use rustbasic_core::{{Schema, SchemaManager, MigrationTrait, DbErr}};
+use rustbasic_core::async_trait;
 
-#[derive(Iden)]
-pub enum ActivityLog {{
-    Table, Id, LogName, Description, SubjectType, SubjectId, CauserType, CauserId, Properties, CreatedAt, UpdatedAt,
-}}
-
-#[derive(Iden)]
 pub struct Migration;
-
-impl MigrationName for Migration {{
-    fn name(&self) -> &str {{
-        "{migration_name}"
-    }}
-}}
 
 #[async_trait]
 impl MigrationTrait for Migration {{
-    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {{
-        manager.create_table(
-            Table::create()
-                .table(ActivityLog::Table)
-                .if_not_exists()
-                .col(ColumnDef::new(ActivityLog::Id).integer().not_null().auto_increment().primary_key())
-                .col(ColumnDef::new(ActivityLog::LogName).string().null())
-                .col(ColumnDef::new(ActivityLog::Description).text().not_null())
-                .col(ColumnDef::new(ActivityLog::SubjectType).string().null())
-                .col(ColumnDef::new(ActivityLog::SubjectId).integer().null())
-                .col(ColumnDef::new(ActivityLog::CauserType).string().null())
-                .col(ColumnDef::new(ActivityLog::CauserId).integer().null())
-                .col(ColumnDef::new(ActivityLog::Properties).json().null())
-                .col(ColumnDef::new(ActivityLog::CreatedAt).date_time().default(Expr::current_timestamp()))
-                .col(ColumnDef::new(ActivityLog::UpdatedAt).date_time().default(Expr::current_timestamp()))
-                .to_owned(),
-        ).await?;
-
-        Ok(())
+    fn name(&self) -> &str {{
+        "{migration_name}"
     }}
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {{
-        manager.drop_table(Table::drop().table(ActivityLog::Table).to_owned()).await?;
-        Ok(())
+    async fn up<'a>(&self, manager: &'a SchemaManager<'a>) -> Result<(), DbErr> {{
+        Schema::create(manager, "activity_log", |table| {{
+            table.id();
+            table.string("log_name").nullable();
+            table.text("description").not_null();
+            table.string("subject_type").nullable();
+            table.integer("subject_id").nullable();
+            table.string("causer_type").nullable();
+            table.integer("causer_id").nullable();
+            table.text("properties").nullable(); // JSON disimpan sebagai TEXT
+            table.timestamps();
+        }}).await
+    }}
+
+    async fn down<'a>(&self, manager: &'a SchemaManager<'a>) -> Result<(), DbErr> {{
+        Schema::drop(manager, "activity_log").await
     }}
 }}
 "#, migration_name = migration_name);
@@ -101,39 +85,29 @@ impl MigrationTrait for Migration {{
     fs::create_dir_all(&models_dir).ok();
 
     let model_name = "activity_log";
-    let table_name = "activity_log";
     let file_path = models_dir.join(format!("{}.rs", model_name));
-    
+
     if !file_path.exists() {
-        let model_template = format!(
-r#"use rustbasic_core::sea_orm::entity::prelude::*;
-use serde::{{Deserialize, Serialize}};
+        let model_template =
+r#"use rustbasic_core::model;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "{table_name}")]
-pub struct Model {{
-    #[sea_orm(primary_key)]
-    pub id: i32,
-    pub log_name: Option<String>,
-    #[sea_orm(column_type = "Text")]
-    pub description: String,
-    pub subject_type: Option<String>,
-    pub subject_id: Option<i32>,
-    pub causer_type: Option<String>,
-    pub causer_id: Option<i32>,
-    pub properties: Option<Json>,
-    pub created_at: Option<DateTime>,
-    pub updated_at: Option<DateTime>,
-}}
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {{}}
-
-impl ActiveModelBehavior for ActiveModel {{}}
-"#, table_name = table_name);
+model! {
+    table: "activity_log",
+    ActivityLog {
+        pub id: i32,
+        pub log_name: Option<String>,
+        pub description: String,
+        pub subject_type: Option<String>,
+        pub subject_id: Option<i32>,
+        pub causer_type: Option<String>,
+        pub causer_id: Option<i32>,
+        pub properties: Option<String>, // JSON string
+    }
+}
+"#;
 
         if fs::write(&file_path, model_template).is_ok() {
-            update_model_mod_rs(&project_root, "ActivityLog", model_name);
+            update_model_mod_rs(&project_root, model_name);
         }
     }
 }
@@ -149,16 +123,15 @@ fn update_migration_mod_rs(project_root: &std::path::Path, mod_name: &str) {
     }
 
     let search_pattern = "fn migrations() -> Vec<Box<dyn MigrationTrait>> {";
-    if let Some(pos) = content.find(search_pattern) {
-        if let Some(insert_pos) = content[pos..].find("        ]") {
-            content.insert_str(pos + insert_pos, &format!("            Box::new({}::Migration),\n", mod_name));
-        }
+    if let Some(pos) = content.find(search_pattern)
+        && let Some(insert_pos) = content[pos..].find("        ]") {
+        content.insert_str(pos + insert_pos, &format!("            Box::new({}::Migration),\n", mod_name));
     }
 
     fs::write(mod_path, content).ok();
 }
 
-fn update_model_mod_rs(project_root: &std::path::Path, class_name: &str, snake_name: &str) {
+fn update_model_mod_rs(project_root: &std::path::Path, snake_name: &str) {
     let mod_path = project_root.join("src/app/models/mod.rs");
     if !mod_path.exists() { return; }
 
@@ -170,5 +143,4 @@ fn update_model_mod_rs(project_root: &std::path::Path, class_name: &str, snake_n
     let mut file = fs::OpenOptions::new().append(true).open(mod_path).unwrap();
     use std::io::Write;
     writeln!(file, "pub mod {};", snake_name).ok();
-    writeln!(file, "pub use {}::Entity as {};", snake_name, class_name).ok();
 }

@@ -1,40 +1,71 @@
-use axum::{
-    body::Body,
-    extract::State,
-    http::Request,
-    middleware::Next,
-    response::Response,
-};
-use rustbasic_core::server::AppState;
-use rustbasic_core::axum_session::Session;
-use rustbasic_core::session_manager::RustBasicSessionStore;
-use sea_orm::DatabaseConnection;
+use rustbasic_core::router::Response;
+use rustbasic_core::middleware::Next;
+use rustbasic_core::requests::Request;
+use rustbasic_core::sqlx::AnyPool;
 use crate::service::ActivityLogger;
 use std::time::Instant;
 use serde_json::json;
 
-/// Middleware to log HTTP requests and responses.
-/// Requires the AppState to have a `db` field of type `DatabaseConnection`.
-pub async fn activity_log_middleware<S>(
-    state: State<S>,
-    session: Session<RustBasicSessionStore>,
-    request: Request<Body>,
+/// Trait to extract database pool from your app state.
+///
+/// `rustbasic-core`'s `AppState` sudah mengimplementasikan trait ini
+/// secara otomatis karena memiliki field `db: AnyPool`.
+///
+/// Jika Anda menggunakan custom state, implement trait ini:
+/// ```rust,ignore
+/// use rustbasic_activitylog::HasDatabase;
+/// use rustbasic_core::sqlx::AnyPool;
+///
+/// #[derive(Clone)]
+/// struct MyState { db: AnyPool }
+///
+/// impl HasDatabase for MyState {
+///     fn db(&self) -> AnyPool { self.db.clone() }
+/// }
+/// ```
+pub trait HasDatabase {
+    fn db(&self) -> AnyPool;
+}
+
+/// Implementasi default untuk `rustbasic_core::AppState`.
+impl HasDatabase for rustbasic_core::AppState {
+    fn db(&self) -> AnyPool {
+        self.db.clone()
+    }
+}
+
+/// RustBasic middleware untuk mencatat setiap HTTP request ke tabel `activity_log`.
+///
+/// Mencatat method, URI, HTTP status, dan durasi. Jika `user_id` (i32) tersimpan
+/// di session, akan dicatat sebagai causer aktivitas.
+///
+/// # Penggunaan
+/// ```rust,ignore
+/// use rustbasic_core::router::Router;
+/// use rustbasic_core::middleware::from_fn;
+/// use rustbasic_activitylog::activity_log_middleware;
+///
+/// let router = Router::new()
+///     .route("/", get(home))
+///     .layer(from_fn(activity_log_middleware));
+/// ```
+pub async fn activity_log_middleware(
+    req: Request,
     next: Next,
-) -> Response 
-where 
-    S: HasDatabase + Clone + Send + Sync + 'static
-{
-    let db = state.db();
+) -> Response {
     let start = Instant::now();
-    let method = request.method().to_string();
-    let uri = request.uri().to_string();
-    
-    // Proceed to next middleware/handler
-    let response = next.run(request).await;
-    
+    let method = req.method.to_string();
+    let uri = req.path.clone();
+    let db: AnyPool = req.state.db.clone();
+
+    // Ambil user_id dari session sebelum req dikonsumsi
+    let user_id: Option<i32> = req.session.get("user_id");
+
+    let response = next.run(req).await;
+
     let duration = start.elapsed();
     let status = response.status().as_u16();
-    
+
     let description = format!("{} {}", method, uri);
     let properties = json!({
         "method": method,
@@ -46,29 +77,12 @@ where
     let mut logger = ActivityLogger::new(db)
         .use_log("http_request")
         .with_properties(properties);
-    
-    // Coba ambil user_id dari session jika ada
-    if let Some(user_id) = session.get::<i32>("user_id") {
-        logger = logger.caused_by("users", user_id);
+
+    if let Some(uid) = user_id {
+        logger = logger.caused_by("users", uid);
     }
-    
+
     let _ = logger.log(&description).await;
-    
+
     response
 }
-
-/// Trait to extract DatabaseConnection from State.
-pub trait HasDatabase {
-    fn db(&self) -> DatabaseConnection;
-}
-
-// Blanket implementation for RustBasic AppState
-impl HasDatabase for AppState {
-    fn db(&self) -> DatabaseConnection {
-        self.db.clone()
-    }
-}
-
-// Implement for any type that has a db field, or let the user implement it.
-// For RustBasic, we can provide a default implementation if we know the structure.
-// But better to keep it decoupled.
