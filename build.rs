@@ -93,7 +93,7 @@ r#"use rustbasic_core::model;
 
 model! {
     table: "activity_log",
-    ActivityLog {
+    Model {
         pub id: i32,
         pub log_name: Option<String>,
         pub description: String,
@@ -143,4 +143,5 @@ fn update_model_mod_rs(project_root: &std::path::Path, snake_name: &str) {
     let mut file = fs::OpenOptions::new().append(true).open(mod_path).unwrap();
     use std::io::Write;
     writeln!(file, "pub mod {};", snake_name).ok();
+    writeln!(file, "pub use {}::Model as ActivityLog;", snake_name).ok();
 }

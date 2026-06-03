@@ -93,7 +93,7 @@ r#"use rustbasic_core::model;
 
 model! {
     table: "activity_log",
-    ActivityLog {
+    Model {
         pub id: i32,
         pub log_name: Option<String>,
         pub description: String,
@@ -159,4 +159,5 @@ fn update_model_mod_rs(snake_name: &str) {
         .expect("Gagal membuka models/mod.rs");
 
     writeln!(file, "{}", mod_line).ok();
+    writeln!(file, "pub use {}::Model as ActivityLog;", snake_name).ok();
 }

@@ -1,6 +1,6 @@
 [package]
 name = "rustbasic-activitylog"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2024"
 build = "build.rs"
 description = "Activity logging package for the RustBasic Framework."
