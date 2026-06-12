@@ -1,6 +1,6 @@
-use rustbasic_core::sqlx::{self, AnyPool};
-use serde_json::Value;
-use chrono::Local;
+use rustbasic_core::sql::{self, AnyPool};
+use rustbasic_core::serde_json::Value;
+use rustbasic_core::chrono::Local;
 
 /// Builder untuk mencatat aktivitas ke tabel `activity_log`.
 ///
@@ -62,13 +62,13 @@ impl ActivityLogger {
     }
 
     /// Simpan log aktivitas ke database.
-    pub async fn log(self, description: &str) -> Result<(), sqlx::Error> {
+    pub async fn log(self, description: &str) -> Result<(), sql::Error> {
         let now = Local::now().naive_local().to_string();
         let properties_str = self.properties
             .as_ref()
             .map(|p| p.to_string());
 
-        sqlx::query(
+        sql::query(
             "INSERT INTO activity_log \
              (log_name, description, subject_type, subject_id, causer_type, causer_id, properties, created_at, updated_at) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"

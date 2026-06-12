@@ -1,10 +1,10 @@
 use rustbasic_core::router::Response;
 use rustbasic_core::middleware::Next;
 use rustbasic_core::requests::Request;
-use rustbasic_core::sqlx::AnyPool;
+use rustbasic_core::sql::AnyPool;
 use crate::service::ActivityLogger;
 use std::time::Instant;
-use serde_json::json;
+use rustbasic_core::serde_json::json;
 
 /// Trait to extract database pool from your app state.
 ///
@@ -14,7 +14,7 @@ use serde_json::json;
 /// Jika Anda menggunakan custom state, implement trait ini:
 /// ```rust,ignore
 /// use rustbasic_activitylog::HasDatabase;
-/// use rustbasic_core::sqlx::AnyPool;
+/// use rustbasic_core::sql::AnyPool;
 ///
 /// #[derive(Clone)]
 /// struct MyState { db: AnyPool }
