@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "rustbasic-activitylog"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "rustbasic-core",
 ]

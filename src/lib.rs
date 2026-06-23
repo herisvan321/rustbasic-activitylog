@@ -1,6 +1,7 @@
 pub mod entities;
 pub mod middleware;
 pub mod service;
+pub mod scaffolding;
 
 pub use service::ActivityLogger;
 pub use middleware::{activity_log_middleware, HasDatabase};
